@@ -1,0 +1,6 @@
+/target
+/data
+*.parquet
+!tests/data/*.parquet
+*.csv
+.DS_Store

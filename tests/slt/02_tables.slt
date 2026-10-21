@@ -1,0 +1,138 @@
+# DDL/DML, filtering, projection and NULL handling over tables.
+statement ok
+CREATE TABLE emp (id INTEGER, name VARCHAR, dept VARCHAR, salary DOUBLE, manager INTEGER, hired DATE)
+
+statement ok
+INSERT INTO emp VALUES
+  (1, 'alice', 'eng', 120000, NULL, DATE '2015-03-01'),
+  (2, 'bob', 'eng', 95000, 1, DATE '2018-07-15'),
+  (3, 'carol', 'sales', 70000, 1, DATE '2019-01-10'),
+  (4, 'dave', 'sales', 65000, 3, DATE '2020-05-20'),
+  (5, 'erin', 'eng', 105000, 1, DATE '2017-11-30'),
+  (6, 'frank', NULL, 50000, 3, DATE '2021-09-01'),
+  (7, 'grace', 'hr', NULL, 1, '2016-02-29')
+
+query ITTR rowsort
+SELECT id, name, dept, salary FROM emp
+----
+1 alice eng 120000.000
+2 bob eng 95000.000
+3 carol sales 70000.000
+4 dave sales 65000.000
+5 erin eng 105000.000
+6 frank NULL 50000.000
+7 grace hr NULL
+
+query IT
+SELECT id, name FROM emp WHERE salary > 90000 ORDER BY id
+----
+1 alice
+2 bob
+5 erin
+
+query T rowsort
+SELECT name FROM emp WHERE dept IS NULL OR salary IS NULL
+----
+frank
+grace
+
+query I
+SELECT count(*) FROM emp WHERE dept <> 'eng'
+----
+3
+
+query T
+SELECT name FROM emp WHERE hired >= '2019-01-01' AND hired < DATE '2021-01-01' ORDER BY hired
+----
+carol
+dave
+
+query TR
+SELECT name, salary * 1.1 AS raised FROM emp WHERE id IN (1, 4) ORDER BY 1
+----
+alice 132000.000
+dave 71500.000
+
+query IT
+SELECT id, name FROM emp WHERE name LIKE '%a%' AND NOT dept = 'sales' ORDER BY id
+----
+1 alice
+7 grace
+
+query TI
+SELECT e.name, e.id + 100 FROM emp AS e WHERE e.id = 3
+----
+carol 103
+
+query ITTRIT rowsort
+SELECT * FROM emp WHERE id > 5
+----
+6 frank NULL 50000.000 3 2021-09-01
+7 grace hr NULL 1 2016-02-29
+
+statement ok
+INSERT INTO emp (id, name) VALUES (8, 'heidi')
+
+query ITT
+SELECT id, name, dept FROM emp WHERE id = 8
+----
+8 heidi NULL
+
+statement ok
+CREATE TABLE emp_copy AS SELECT id, name FROM emp WHERE id <= 2
+
+query IT
+SELECT * FROM emp_copy ORDER BY id
+----
+1 alice
+2 bob
+
+statement ok
+INSERT INTO emp_copy SELECT id, upper(name) FROM emp WHERE id = 3
+
+query I
+SELECT count(*) FROM emp_copy
+----
+3
+
+statement ok
+DROP TABLE emp_copy
+
+statement error does not exist
+SELECT * FROM emp_copy
+
+statement ok
+DROP TABLE IF EXISTS emp_copy
+
+query T
+SELECT name FROM emp ORDER BY salary DESC NULLS LAST, id LIMIT 3
+----
+alice
+erin
+bob
+
+query T
+SELECT name FROM emp ORDER BY salary NULLS FIRST, id LIMIT 3
+----
+grace
+heidi
+frank
+
+query T
+SELECT name FROM emp ORDER BY id LIMIT 2 OFFSET 3
+----
+dave
+erin
+
+query T
+SELECT DISTINCT dept FROM emp WHERE dept IS NOT NULL ORDER BY dept
+----
+eng
+hr
+sales
+
+query T
+SELECT name FROM emp ORDER BY length(name) DESC, name LIMIT 2
+----
+alice
+carol

@@ -1,0 +1,52 @@
+# EXPLAIN output (plan shape) for optimizer-visible behaviour.
+statement ok
+CREATE TABLE a (x INTEGER, y INTEGER, z VARCHAR)
+
+statement ok
+CREATE TABLE b (x INTEGER, w INTEGER)
+
+statement ok
+INSERT INTO a VALUES (1, 2, 'p'), (2, 3, 'q')
+
+statement ok
+INSERT INTO b VALUES (1, 10), (3, 30)
+
+# Constant folding + predicate pushdown into the scan + projection pruning.
+query T
+EXPLAIN SELECT y FROM a WHERE x > 1 + 1
+----
+== Optimized Logical Plan ==
+Projection: y
+  TableScan: a projection=[x, y] filters=[x > 2]
+== Physical Plan ==
+ProjectionExec: y@1
+  FilterExec: (x@0 > 2)
+    ScanExec: a [x, y]
+
+# WHERE false becomes an empty relation.
+query T
+EXPLAIN SELECT x FROM a WHERE 1 = 0
+----
+== Optimized Logical Plan ==
+Projection: x
+  EmptyRelation
+== Physical Plan ==
+ProjectionExec: x@0
+  EmptyExec
+
+# Cross join + equality turns into a hash join; filters land on each side.
+query T
+EXPLAIN SELECT a.y, b.w FROM a, b WHERE a.x = b.x AND b.w > 5 AND a.z = 'p'
+----
+== Optimized Logical Plan ==
+Projection: y, w
+  Inner Join: on=[a.x = b.x]
+    TableScan: a projection=[x, y, z] filters=[z = 'p']
+    TableScan: b projection=[x, w] filters=[w > 5]
+== Physical Plan ==
+ProjectionExec: y@1, w@4
+  HashJoinExec: Inner, on=[x@0 = x@0], build=left
+    FilterExec: (z@2 = 'p')
+      ScanExec: a [x, y, z]
+    FilterExec: (w@1 > 5)
+      ScanExec: b [x, w]

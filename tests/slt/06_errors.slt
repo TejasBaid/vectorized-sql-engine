@@ -1,0 +1,54 @@
+# Error messages: parse, bind and type errors carry clear messages.
+statement ok
+CREATE TABLE t (a INTEGER, b VARCHAR)
+
+statement error expected an expression
+SELECT FROM t
+
+statement error expected end of statement
+SELECT a FROM t WHERE a = 1 1
+
+statement error column "c" not found
+SELECT c FROM t
+
+statement error did you mean "a"
+SELECT aa FROM t
+
+statement error table "tt" does not exist (did you mean "t"?)
+SELECT * FROM tt
+
+statement error cannot compare BIGINT with VARCHAR
+SELECT * FROM t WHERE a = b
+
+statement error cannot apply operator '+' to types VARCHAR and BIGINT
+SELECT b + 1 FROM t
+
+statement error WHERE condition must be BOOLEAN
+SELECT * FROM t WHERE a
+
+statement error unknown function "frobnicate"
+SELECT frobnicate(a) FROM t
+
+statement error unterminated string literal
+SELECT 'abc
+
+statement error invalid date literal
+SELECT DATE '2020-13-45'
+
+statement error could not convert string 'abc' to BIGINT
+SELECT CAST('abc' AS INTEGER)
+
+statement error already exists
+CREATE TABLE t (x INTEGER)
+
+statement error INSERT has 1 values but 2 target columns
+INSERT INTO t VALUES (1)
+
+statement error only INNER, LEFT and CROSS joins are supported
+SELECT * FROM t RIGHT JOIN t AS u ON t.a = u.a
+
+statement error LIMIT must be a non-negative integer constant
+SELECT * FROM t LIMIT -1
+
+statement error ORDER BY position 3 is not in select list
+SELECT a, b FROM t ORDER BY 3

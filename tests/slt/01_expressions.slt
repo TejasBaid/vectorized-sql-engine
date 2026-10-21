@@ -1,0 +1,124 @@
+# Scalar expressions, literals, arithmetic, casts and three-valued logic.
+query IRT
+SELECT 1 + 2 * 3, 10.0 / 4, 'a' || 'b'
+----
+7 2.500 ab
+
+query III
+SELECT 7 / 2, -7 / 2, 7 % 3
+----
+3 -3 1
+
+query I
+SELECT 1 / 0
+----
+NULL
+
+query R
+SELECT 1.5 / 0
+----
+NULL
+
+query III
+SELECT (1 + 2) * 3, 1 + 2 * 3, 2 * (3 - 1) * 4
+----
+9 7 16
+
+query T
+SELECT CAST(42 AS VARCHAR) || '!'
+----
+42!
+
+query IR
+SELECT CAST('123' AS INTEGER) + 1, CAST(3 AS DOUBLE) / 2
+----
+124 1.500
+
+query T
+SELECT CAST(DATE '2024-02-28' + 1 AS VARCHAR)
+----
+2024-02-29
+
+query TT
+SELECT DATE '1998-12-01' - INTERVAL '90' DAY, DATE '2024-01-31' + INTERVAL '1' MONTH
+----
+1998-09-02 2024-02-29
+
+query I
+SELECT DATE '1995-03-15' - DATE '1995-01-01'
+----
+73
+
+query III
+SELECT EXTRACT(YEAR FROM DATE '1995-03-15'), EXTRACT(MONTH FROM DATE '1995-03-15'), EXTRACT(DAY FROM DATE '1995-03-15')
+----
+1995 3 15
+
+# Three-valued logic: NULL AND false is false, NULL OR true is true.
+query IIIII
+SELECT NULL AND false, NULL AND true, NULL OR true, NULL OR false, NOT (NULL = 1)
+----
+false NULL true NULL NULL
+
+query II
+SELECT NULL IS NULL, 1 IS NOT NULL
+----
+true true
+
+query III
+SELECT 2 BETWEEN 1 AND 3, 5 NOT BETWEEN 1 AND 3, 3 IN (1, 2, 3)
+----
+true true true
+
+query III
+SELECT 4 IN (1, 2, NULL), 4 NOT IN (1, 2), 1 IN (1, NULL)
+----
+NULL true true
+
+query IIII
+SELECT 'hello' LIKE 'h%', 'hello' LIKE '_ello', 'hello' NOT LIKE '%z%', 'HeLLo' ILIKE 'hello'
+----
+true true true true
+
+query TTI
+SELECT upper('abc'), lower('ABC'), length('hello')
+----
+ABC abc 5
+
+query TTT
+SELECT substr('hello world', 7), substring('hello world', 1, 5), trim('  pad  ')
+----
+world hello pad
+
+query RRRI
+SELECT abs(-2.5), round(2.567, 2), floor(2.7), ceil(2)
+----
+2.500 2.570 2.000 2
+
+query ITI
+SELECT coalesce(NULL, 2, 3), coalesce(NULL, 'x'), nullif(1, 1)
+----
+2 x NULL
+
+query TT
+SELECT CASE WHEN 1 > 2 THEN 'a' WHEN 2 > 1 THEN 'b' ELSE 'c' END, CASE 3 WHEN 1 THEN 'one' WHEN 3 THEN 'three' END
+----
+b three
+
+query T
+SELECT CASE WHEN false THEN 'x' END
+----
+NULL
+
+query R
+SELECT 1 + 2.5
+----
+3.500
+
+query I
+SELECT -(-5)
+----
+5
+
+statement error integer overflow
+SELECT 9223372036854775807 + 1

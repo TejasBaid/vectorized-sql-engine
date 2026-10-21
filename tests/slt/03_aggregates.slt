@@ -1,0 +1,114 @@
+# Aggregation: GROUP BY, HAVING, NULL semantics, DISTINCT.
+statement ok
+CREATE TABLE t (g VARCHAR, k INTEGER, v INTEGER, f DOUBLE)
+
+statement ok
+INSERT INTO t VALUES ('a', 1, 10, 1.5), ('a', 1, 20, 2.5), ('a', 2, NULL, NULL), ('b', 1, 5, 0.5), ('b', 2, 5, 4.0), (NULL, 3, 7, 1.0), ('c', NULL, NULL, NULL)
+
+query IIIRIIR
+SELECT count(*), count(v), sum(v), avg(v), min(v), max(v), sum(f) FROM t
+----
+7 5 47 9.400 5 20 9.500
+
+query TIIRII rowsort
+SELECT g, count(*), sum(v), avg(f), min(k), max(k) FROM t GROUP BY g
+----
+NULL 1 7 1.000 3 3
+a 3 30 2.000 1 2
+b 2 10 2.250 1 2
+c 1 NULL NULL NULL NULL
+
+query TI
+SELECT g, sum(v) AS s FROM t GROUP BY g HAVING sum(v) > 10 ORDER BY s DESC
+----
+a 30
+
+query TII
+SELECT g, k, count(*) FROM t GROUP BY g, k ORDER BY g NULLS LAST, k NULLS LAST
+----
+a 1 2
+a 2 1
+b 1 1
+b 2 1
+c NULL 1
+NULL 3 1
+
+query II
+SELECT count(DISTINCT v), count(DISTINCT g) FROM t
+----
+4 3
+
+query TI
+SELECT g, count(DISTINCT k) FROM t WHERE g IS NOT NULL GROUP BY g ORDER BY g
+----
+a 2
+b 2
+c 0
+
+# Aggregates over an empty input: one row, COUNT = 0, others NULL.
+query IIR
+SELECT count(*), sum(v), avg(v) FROM t WHERE k > 100
+----
+0 NULL NULL
+
+# Grouped aggregate over an empty input: no rows.
+query TI
+SELECT g, count(*) FROM t WHERE k > 100 GROUP BY g
+----
+
+
+query TI
+SELECT g, count(*) FROM t GROUP BY 1 HAVING count(*) > 1 ORDER BY 1
+----
+a 3
+b 2
+
+query II rowsort
+SELECT k % 2 AS parity, sum(v) FROM t WHERE k IS NOT NULL GROUP BY k % 2
+----
+0 5
+1 42
+
+query TT
+SELECT min(g), max(g) FROM t
+----
+a c
+
+query TI
+SELECT upper(g) AS ug, sum(v) + 1 FROM t WHERE g IS NOT NULL GROUP BY g ORDER BY ug
+----
+A 31
+B 11
+C NULL
+
+query TI
+SELECT g, count(*) FROM t GROUP BY g ORDER BY count(*) DESC, g NULLS FIRST LIMIT 2
+----
+a 3
+b 2
+
+query TR
+SELECT g, sum(CASE WHEN v > 6 THEN f ELSE 0 END) FROM t WHERE g IS NOT NULL GROUP BY g ORDER BY g
+----
+a 4.000
+b 0.000
+c 0.000
+
+query I
+SELECT sum(k) FROM (SELECT DISTINCT k FROM t)
+----
+6
+
+query RR
+SELECT max(f) - min(f), avg(f) * 2 FROM t
+----
+3.500 3.800
+
+statement error must appear in the GROUP BY clause
+SELECT g, v FROM t GROUP BY g
+
+statement error aggregate functions are not allowed in WHERE
+SELECT g FROM t WHERE sum(v) > 1
+
+statement error requires a numeric argument
+SELECT sum(g) FROM t

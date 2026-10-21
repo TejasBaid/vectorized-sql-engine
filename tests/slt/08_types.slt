@@ -1,0 +1,63 @@
+# Type coercion and date handling.
+statement ok
+CREATE TABLE m (i INTEGER, d DOUBLE, s VARCHAR, dt DATE, flag BOOLEAN)
+
+statement ok
+INSERT INTO m VALUES (1, 1.5, '10', DATE '2020-01-31', true), (2, 2.0, '20', DATE '2020-02-29', false), (3, NULL, NULL, NULL, NULL)
+
+query R
+SELECT i + d FROM m WHERE i = 1
+----
+2.500
+
+query I rowsort
+SELECT i FROM m WHERE i = 2.0 OR d = 1
+----
+2
+
+query I
+SELECT CAST(s AS INTEGER) * 2 FROM m WHERE s IS NOT NULL ORDER BY 1
+----
+20
+40
+
+query T
+SELECT dt + INTERVAL '1' MONTH FROM m WHERE dt IS NOT NULL ORDER BY dt
+----
+2020-02-29
+2020-03-29
+
+query T
+SELECT dt FROM m WHERE dt BETWEEN '2020-02-01' AND '2020-03-01'
+----
+2020-02-29
+
+query I
+SELECT count(*) FROM m WHERE flag
+----
+1
+
+query I
+SELECT count(*) FROM m WHERE NOT flag
+----
+1
+
+query TI
+SELECT min(dt), max(dt) - min(dt) FROM m
+----
+2020-01-31 29
+
+query I
+SELECT year(dt) FROM m WHERE i = 1
+----
+2020
+
+query T
+SELECT CAST(dt AS VARCHAR) FROM m WHERE i = 2
+----
+2020-02-29
+
+query R
+SELECT sum(i) / 2.0 FROM m
+----
+3.000

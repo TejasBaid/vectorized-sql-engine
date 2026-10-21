@@ -1,0 +1,107 @@
+# Subqueries in FROM, CTEs, DISTINCT and ORDER BY corner cases.
+statement ok
+CREATE TABLE sales (region VARCHAR, product VARCHAR, amount INTEGER)
+
+statement ok
+INSERT INTO sales VALUES ('east', 'apple', 10), ('east', 'pear', 20), ('west', 'apple', 30), ('west', 'apple', 5), ('north', 'fig', 7)
+
+query TI
+SELECT region, total FROM (SELECT region, sum(amount) AS total FROM sales GROUP BY region) s WHERE total > 10 ORDER BY total DESC
+----
+west 35
+east 30
+
+query TI
+SELECT s.region, s.n FROM (SELECT region, count(*) AS n FROM sales GROUP BY region) AS s ORDER BY s.region
+----
+east 2
+north 1
+west 2
+
+query I
+SELECT max(total) FROM (SELECT region, sum(amount) AS total FROM sales GROUP BY region) t
+----
+35
+
+query TI
+WITH totals AS (SELECT region, sum(amount) AS total FROM sales GROUP BY region)
+SELECT region, total FROM totals ORDER BY total
+----
+north 7
+east 30
+west 35
+
+query TII
+WITH a AS (SELECT region, sum(amount) AS t FROM sales GROUP BY region),
+     b AS (SELECT region, count(*) AS c FROM sales GROUP BY region)
+SELECT a.region, a.t, b.c FROM a JOIN b ON a.region = b.region ORDER BY a.region
+----
+east 30 2
+north 7 1
+west 35 2
+
+query TI
+WITH big AS (SELECT * FROM sales WHERE amount >= 10), agg AS (SELECT product, sum(amount) AS s FROM big GROUP BY product)
+SELECT product, s FROM agg ORDER BY product
+----
+apple 40
+pear 20
+
+# CTE shadows a table name.
+query I
+WITH sales AS (SELECT 1 AS amount) SELECT sum(amount) FROM sales
+----
+1
+
+query TT rowsort
+SELECT DISTINCT region, product FROM sales
+----
+east apple
+east pear
+north fig
+west apple
+
+# ORDER BY a column that is not projected (hidden sort column).
+query T
+SELECT product FROM sales ORDER BY amount DESC LIMIT 2
+----
+apple
+pear
+
+query TI
+SELECT region, sum(amount) FROM sales GROUP BY region ORDER BY sum(amount)
+----
+north 7
+east 30
+west 35
+
+query TI
+SELECT region AS r, count(*) AS c FROM sales GROUP BY r ORDER BY c DESC, r
+----
+east 2
+west 2
+north 1
+
+query T
+SELECT x.product FROM (SELECT product, amount FROM sales WHERE region = 'east') x ORDER BY x.amount
+----
+apple
+pear
+
+query I
+SELECT count(*) FROM (SELECT * FROM sales LIMIT 3) t
+----
+3
+
+query TI
+SELECT * FROM (SELECT region, amount FROM sales ORDER BY amount DESC LIMIT 3) t ORDER BY amount
+----
+east 10
+east 20
+west 30
+
+statement error ORDER BY expressions must appear in select list
+SELECT DISTINCT region FROM sales ORDER BY amount
+
+statement error not supported
+SELECT * FROM sales WHERE amount > (SELECT avg(amount) FROM sales)

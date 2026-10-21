@@ -1,0 +1,168 @@
+# Inner, left, cross and multi-way joins.
+statement ok
+CREATE TABLE dept (id INTEGER, name VARCHAR, budget INTEGER)
+
+statement ok
+INSERT INTO dept VALUES (1, 'eng', 1000), (2, 'sales', 500), (3, 'hr', 200), (4, 'empty', 0)
+
+statement ok
+CREATE TABLE person (pid INTEGER, pname VARCHAR, dept_id INTEGER, city_id INTEGER)
+
+statement ok
+INSERT INTO person VALUES (1, 'ann', 1, 10), (2, 'ben', 1, 20), (3, 'cat', 2, 10), (4, 'dan', NULL, 30), (5, 'eve', 3, NULL), (6, 'fay', 9, 10)
+
+statement ok
+CREATE TABLE city (cid INTEGER, cname VARCHAR)
+
+statement ok
+INSERT INTO city VALUES (10, 'paris'), (20, 'rome'), (30, 'oslo')
+
+query TT rowsort
+SELECT p.pname, d.name FROM person p JOIN dept d ON p.dept_id = d.id
+----
+ann eng
+ben eng
+cat sales
+eve hr
+
+query TT rowsort
+SELECT p.pname, d.name FROM person p LEFT JOIN dept d ON p.dept_id = d.id
+----
+ann eng
+ben eng
+cat sales
+dan NULL
+eve hr
+fay NULL
+
+query TT rowsort
+SELECT d.name, p.pname FROM dept d LEFT JOIN person p ON p.dept_id = d.id
+----
+empty NULL
+eng ann
+eng ben
+hr eve
+sales cat
+
+# Comma join + WHERE equality becomes a hash join.
+query TT rowsort
+SELECT pname, cname FROM person, city WHERE city_id = cid AND cname <> 'oslo'
+----
+ann paris
+ben rome
+cat paris
+fay paris
+
+query TTT rowsort
+SELECT p.pname, d.name, c.cname FROM person p JOIN dept d ON p.dept_id = d.id JOIN city c ON p.city_id = c.cid
+----
+ann eng paris
+ben eng rome
+cat sales paris
+
+query TTT rowsort
+SELECT p.pname, d.name, c.cname FROM person p, dept d, city c WHERE p.dept_id = d.id AND p.city_id = c.cid AND d.budget >= 500
+----
+ann eng paris
+ben eng rome
+cat sales paris
+
+query I
+SELECT count(*) FROM person CROSS JOIN city
+----
+18
+
+query TI rowsort
+SELECT d.name, count(p.pid) FROM dept d LEFT JOIN person p ON p.dept_id = d.id GROUP BY d.name
+----
+empty 0
+eng 2
+hr 1
+sales 1
+
+# LEFT JOIN with a condition on the right side in ON (keeps all left rows).
+query TT rowsort
+SELECT d.name, p.pname FROM dept d LEFT JOIN person p ON p.dept_id = d.id AND p.pname <> 'ben'
+----
+empty NULL
+eng ann
+hr eve
+sales cat
+
+# ... versus the same condition in WHERE (null-rejecting: LEFT becomes INNER).
+query TT rowsort
+SELECT d.name, p.pname FROM dept d LEFT JOIN person p ON p.dept_id = d.id WHERE p.pname <> 'ben'
+----
+eng ann
+hr eve
+sales cat
+
+query TT rowsort
+SELECT d.name, p.pname FROM dept d LEFT JOIN person p ON p.dept_id = d.id WHERE p.pid IS NULL
+----
+empty NULL
+
+# Non-equi join condition (nested loop join).
+query TT rowsort
+SELECT a.pname, b.pname FROM person a JOIN person b ON a.pid < b.pid AND a.city_id = 10 AND b.city_id = 10
+----
+ann cat
+ann fay
+cat fay
+
+# Equi join with a residual filter.
+query TT rowsort
+SELECT a.pname, b.pname FROM person a JOIN person b ON a.city_id = b.city_id AND a.pid < b.pid
+----
+ann cat
+ann fay
+cat fay
+
+query TT rowsort
+SELECT pname, cname FROM person JOIN city ON city_id = cid WHERE pid % 2 = 1
+----
+ann paris
+cat paris
+
+statement ok
+CREATE TABLE l (k INTEGER, a VARCHAR)
+
+statement ok
+CREATE TABLE r (k INTEGER, b VARCHAR)
+
+statement ok
+INSERT INTO l VALUES (1, 'x'), (2, 'y'), (2, 'yy'), (NULL, 'n')
+
+statement ok
+INSERT INTO r VALUES (2, 'p'), (2, 'q'), (3, 'z'), (NULL, 'm')
+
+# Duplicate keys multiply; NULL keys never match.
+query TT rowsort
+SELECT a, b FROM l JOIN r ON l.k = r.k
+----
+y p
+y q
+yy p
+yy q
+
+query ITIT rowsort
+SELECT * FROM l LEFT JOIN r USING (k)
+----
+1 x NULL NULL
+2 y 2 p
+2 y 2 q
+2 yy 2 p
+2 yy 2 q
+NULL n NULL NULL
+
+query TT rowsort
+SELECT a, b FROM l JOIN r ON l.k = r.k AND b = 'q'
+----
+y q
+yy q
+
+statement error ambiguous
+SELECT k FROM l JOIN r ON l.k = r.k
+
+statement error not found
+SELECT l.nope FROM l

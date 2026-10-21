@@ -1,0 +1,25 @@
+[package]
+name = "sqlengine"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "A vectorized, multi-threaded SQL query engine written from scratch (parser, optimizer, columnar execution)"
+license = "MIT"
+repository = "https://github.com/TejasBaid/vectorized-sql-engine"
+readme = "README.md"
+keywords = ["sql", "database", "query-engine", "vectorized", "olap"]
+categories = ["database-implementations"]
+default-run = "sqlengine"
+
+[dependencies]
+bytes = "1.12.1"
+mimalloc = { version = "0.1.52", default-features = false }
+parquet = { version = "60.0.0", default-features = false, features = ["snap", "zstd"] }
+rustyline = "18"
+
+[dev-dependencies]
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
