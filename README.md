@@ -1,7 +1,5 @@
 # sqlengine
 
-[![CI](https://github.com/TejasBaid/vectorized-sql-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/TejasBaid/vectorized-sql-engine/actions/workflows/ci.yml)
-
 A vectorized, multi-threaded SQL query engine written from scratch in Rust, in the spirit of DataFusion and DuckDB.
 SQL text goes through a hand-written lexer and Pratt parser, a binder that type-checks it against a catalog, a
 rule-based optimizer (constant folding, predicate and projection pushdown, cardinality-driven join reordering), and a
@@ -224,9 +222,6 @@ cargo run --release --bin bench -- --data data/sf1 --format parquet --runs 10
 bench/run_all.sh                                      # everything in the table below (+ DuckDB if installed)
 python3 bench/slt_vs_duckdb.py                        # cross-check .slt expectations against DuckDB
 ```
-
-CI (`.github/workflows/ci.yml`) runs fmt, clippy with `-D warnings`, and the build and test suite on Linux and macOS,
-plus a smoke run of the generator, the benchmark and `EXPLAIN ANALYZE`.
 
 ## Testing
 
